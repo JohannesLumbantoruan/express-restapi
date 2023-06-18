@@ -79,7 +79,10 @@ exports.storePost = (req, res, next) => {
             return user.save();
         })
         .then(user => {
-            io.getIO().emit('posts', { action: 'create', post: { ...post._doc, creator: { _id: user._id, name: user.name }} });
+            io.getIO().emit('posts', {
+                action: 'create',
+                post: { ...post._doc, creator: { _id: user._id, name: user.name }}
+            });
 
             res
                 .status(200)
@@ -136,6 +139,7 @@ exports.updatePost = (req, res, next) => {
     
     Post
         .findById(postId)
+        .populate({ path: 'creator', select: 'name email' })
         .then(post => {
             if (!post) {
                 const err = new Error('Post not found');
@@ -143,7 +147,7 @@ exports.updatePost = (req, res, next) => {
                 return next(err);
             }
 
-            if (post.creator.toString() !== req.user.userId) {
+            if (post.creator._id.toString() !== req.user.userId) {
                 const err = new Error('Not authorized');
                 err.statusCode = 403;
                 return next(err);
@@ -154,6 +158,7 @@ exports.updatePost = (req, res, next) => {
             post.title = title;
             post.content = content;
             if (imageUrl !== 'undefined') post.imageUrl = imageUrl;
+            io.getIO().emit('posts', { action: 'update', post });
             return post.save();
         })
         .then(result => {

@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 const authenticate = require('./middlewares/authenticate')
 
@@ -74,9 +75,28 @@ mongoose
         console.log('MongoDB connected');
         const server = app.listen(8080);
         const io = require('./socket').init(server);
+        const users = {};
 
         io.on('connection', socket => {
-            console.log('User connected with id:', socket.id);
+            let user;
+            const token = socket.handshake.headers.authorization.split(' ')[1];
+            jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+                if (err) throw err;
+                user = decoded;
+                users[user.email] = socket.id;
+            });
+            console.log(users);
+            console.log(`${user.email ?? 'User'} connected with socket id: ${users[user.email]}`);
+
+            socket.on('message', data => {
+                const { to: toEmail, from: fromEmail, body } = data;
+                console.log(users);
+                console.log(`A message sending to ${toEmail} with socket id ${users[toEmail]} from ${fromEmail} with socket id ${users[fromEmail]}. The message body: ${body}`);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('User with id ' + socket.id + ' disconnected');
+            });
         });
     })
     .catch(err => {
